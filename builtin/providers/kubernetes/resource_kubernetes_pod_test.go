@@ -55,6 +55,34 @@ func TestAccKubernetesPod_basic(t *testing.T) {
 	})
 }
 
+func TestAccKubernetesPod_with_limit_range(t *testing.T) {
+	var conf api.Pod
+
+	podName := fmt.Sprintf("tf-acc-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	imageName := "nginx:1.7.9"
+	limitRangeName := fmt.Sprintf("tf-acc-test-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:  func() { testAccPreCheck(t) },
+		Providers: testAccProviders,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccKubernetesPodConfigWithLimitRange(podName, imageName, limitRangeName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					testAccCheckKubernetesPodExists("kubernetes_pod.test", &conf),
+					resource.TestCheckResourceAttr("kubernetes_pod.test", "metadata.0.annotations.%", "0"),
+					resource.TestCheckResourceAttr("kubernetes_pod.test", "metadata.0.labels.%", "0"),
+					resource.TestCheckResourceAttr("kubernetes_pod.test", "metadata.0.name", podName),
+					resource.TestCheckResourceAttrSet("kubernetes_pod.test", "metadata.0.generation"),
+					resource.TestCheckResourceAttrSet("kubernetes_pod.test", "metadata.0.resource_version"),
+					resource.TestCheckResourceAttrSet("kubernetes_pod.test", "metadata.0.self_link"),
+					resource.TestCheckResourceAttrSet("kubernetes_pod.test", "metadata.0.uid"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccKubernetesPod_with_pod_security_context(t *testing.T) {
 	var conf api.Pod
 
@@ -377,6 +405,46 @@ resource "kubernetes_pod" "test" {
 	`, secretName, configMapName, podName, imageName)
 }
 
+func testAccKubernetesPodConfigWithLimitRange(podName, imageName, limitRangeName string) string {
+	return fmt.Sprintf(`
+resource "kubernetes_pod" "test" {
+  metadata {
+    name = "%s"
+  }
+
+  spec {
+    containers {
+      image = "%s"
+      name  = "containername"
+    }
+  }
+  depends_on = ["kubernetes_limit_range.test"]
+}
+
+resource "kubernetes_limit_range" "test" {
+  metadata {
+    name = "%s"
+  }
+  spec {
+    limit {
+    type = "Pod"
+      min {
+        cpu = "1m"
+        memory = "1M"
+      }
+    }
+    limit {
+      type = "Container"
+      default_request {
+        cpu = "50m"
+        memory = "24M"
+      }
+    }
+  }
+}
+`, podName, imageName, limitRangeName)
+}
+
 func testAccKubernetesPodConfigWithSecurityContext(podName, imageName string) string {
 	return fmt.Sprintf(`
 resource "kubernetes_pod" "test" {
@@ -390,6 +458,7 @@ resource "kubernetes_pod" "test" {
   spec {
     security_context {
       run_as_non_root     = true
+      run_as_user         = 101
       supplemental_groups = [101]
     }
     containers {
@@ -549,8 +618,8 @@ resource "kubernetes_pod" "test" {
       name  = "containername"
 
       security_context {
-        privileged = true
-
+        privileged  = true
+        run_as_user = 1
         se_linux_options {
           level = "s0:c123,c456"
         }

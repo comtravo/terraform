@@ -47,6 +47,8 @@ func resourceKubernetesPodCreate(d *schema.ResourceData, meta interface{}) error
 		return err
 	}
 
+	spec.AutomountServiceAccountToken = ptrToBool(false)
+
 	pod := api.Pod{
 		ObjectMeta: metadata,
 		Spec:       spec,
@@ -103,7 +105,7 @@ func resourceKubernetesPodUpdate(d *schema.ResourceData, meta interface{}) error
 		return fmt.Errorf("Failed to marshal update operations: %s", err)
 	}
 
-	log.Printf("[INFO] Updating  pod%s: %s", d.Id(), ops)
+	log.Printf("[INFO] Updating  pod %s: %s", d.Id(), ops)
 
 	out, err := conn.CoreV1().Pods(namespace).Patch(name, pkgApi.JSONPatchType, data)
 	if err != nil {
