@@ -16,6 +16,7 @@ func resourceAwsSfnStateMachine() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceAwsSfnStateMachineCreate,
 		Read:   resourceAwsSfnStateMachineRead,
+		Update: resourceAwsSfnStateMachineUpdate,
 		Delete: resourceAwsSfnStateMachineDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
@@ -25,14 +26,14 @@ func resourceAwsSfnStateMachine() *schema.Resource {
 			"definition": {
 				Type:         schema.TypeString,
 				Required:     true,
-				ForceNew:     true,
+				ForceNew:     false,
 				ValidateFunc: validateSfnStateMachineDefinition,
 			},
 
 			"name": {
 				Type:         schema.TypeString,
 				Required:     true,
-				ForceNew:     true,
+				ForceNew:     false,
 				ValidateFunc: validateSfnStateMachineName,
 			},
 
@@ -103,9 +104,11 @@ func resourceAwsSfnStateMachineRead(d *schema.ResourceData, meta interface{}) er
 		StateMachineArn: aws.String(d.Id()),
 	})
 	if err != nil {
-		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == "NotFoundException" {
-			d.SetId("")
-			return nil
+		if awserr, ok := err.(awserr.Error); ok {
+			if awserr.Code() == "NotFoundException" || awserr.Code() == "StateMachineDoesNotExist" {
+				d.SetId("")
+				return nil
+			}
 		}
 		return err
 	}
@@ -120,6 +123,12 @@ func resourceAwsSfnStateMachineRead(d *schema.ResourceData, meta interface{}) er
 	}
 
 	return nil
+}
+
+func resourceAwsSfnStateMachineUpdate(d *schema.ResourceData, meta interface{}) error {
+	//  Terraform should "just" forget the old state machine
+	d.SetId("")
+	return resourceAwsSfnStateMachineCreate(d, meta)
 }
 
 func resourceAwsSfnStateMachineDelete(d *schema.ResourceData, meta interface{}) error {
